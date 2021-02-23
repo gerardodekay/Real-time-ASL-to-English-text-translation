@@ -1,13 +1,11 @@
 from i3d import Inception3D
+from pretrained_i3d import PreTrainedInception3d
 import tensorflow as tf
 
+
 def check_i3d():
-    m = Inception3D()
-    m.build(input_shape=(None, 64, 224, 224, 3))
-    m.compile(loss="categorical_crossentropy", optimizer=tf.keras.optimizers.Adam(learning_rate=0.001), metrics=['accuracy'])
-
+    m = PreTrainedInception3d(include_top=True, input_shape=(40, 224, 224, 3))
     print(m.summary())
-
 
 if __name__ == "__main__":
     check_i3d()
