@@ -12,6 +12,7 @@ from keras.layers import Reshape
 from keras.layers import Lambda
 from keras.utils.data_utils import get_file
 from keras import backend as K
+from tensorflow.python.ops.distributions.uniform import Uniform
 
 WEIGHTS = {
     'flow_imagenet_and_kinetics':
@@ -285,4 +286,33 @@ def PreTrainedInception3d(include_top=True,
     # load weights
     model.load_weights(WEIGHTS[pretrained_weights])
 
+    return model
+
+
+def TopLayer(input_shape, classes, dropout_prob):
+    inputs = Input(shape=input_shape, name="input")
+    x = Dropout(dropout_prob)(inputs)
+    x = Unit_3d(x, classes, 1, 1, 1, padding='same',
+                  use_bias=True, use_activation_fn=False, use_bn=False, name='Conv3d_6a_1x1')
+    num_frames_remaining = int(x.shape[1])
+    x = Reshape((num_frames_remaining, classes))(x)
+    x = Lambda(lambda x: K.mean(x, axis=1, keepdims=False),
+               output_shape=lambda s: (s[0], s[2]))(x)
+    x = Activation('softmax', name='prediction')(x)
+    final_model = Model(inputs=inputs, outputs=x, name="i3d_top")
+    return final_model
+
+
+def add_top_layer(base_model: Model, classes: int, dropout_prob: bool):
+    top_layer = TopLayer(base_model.output_shape[1:], classes, dropout_prob)
+    x = base_model.output
+    predictions = top_layer(x)
+    new_model = Model(inputs=base_model.input, outputs=predictions, name="i3d_with_top")
+    return new_model
+
+
+def layers_freeze(model):
+    print("Freeze all %d layers in Model %s" % (len(model.layers), model.name))
+    for layer in model.layers:
+        layer.trainable = False
     return model
