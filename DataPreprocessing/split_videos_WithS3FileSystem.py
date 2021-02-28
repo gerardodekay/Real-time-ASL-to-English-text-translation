@@ -1,27 +1,37 @@
 import json
 import os
 import shutil
+import boto3
+import pandas as pd
+from sagemaker import get_execution_role
+from PIL import Image
+import s3fs
 
-VIDEOS_PATH = 'C:/Users/nekeshar/Documents/DeepNN/Project/ASLToTextProject/MSData/subset/TrimmedVideos'
-JSON_PATH = 'C:/Users/nekeshar/Documents/DeepNN/Project/ASLToTextProject'
+fs = s3fs.S3FileSystem()
+
+role = get_execution_role()
+bucket='cs230projectdata'
+data_key = 'TrimmedVideos'
+VIDEOS_PATH = 's3://{}/{}'.format(bucket, data_key)
+JSON_PATH = '/home/ec2-user/SageMaker/Real-time-ASL-to-English-text-translation/data/msasl'
 
 def copy_split(split_json, split_name="train"):
     split_classes = []
     split_misses = []
-    if not os.path.exists(VIDEOS_PATH + "/" + split_name):
-        os.mkdir(VIDEOS_PATH + "/" + split_name)
+    if not fs.exists(VIDEOS_PATH + "/" + split_name):
+        fs.mkdir(VIDEOS_PATH + "/" + split_name)
     for t in split_json:
         url = t["url"]
         file_name = url[url.index("v=")+2:len(url)] + ".mp4"
-        file_path = VIDEOS_PATH + "/videos/" + file_name
+        file_path = VIDEOS_PATH + "/" + file_name
         target_dir = VIDEOS_PATH + "/" + split_name + "/" + t["clean_text"]
         target_path = target_dir + "/" + file_name
-        if os.path.exists(file_path):
-            if not os.path.exists(target_dir):
-                os.mkdir(target_dir)
-            if not os.path.exists(target_path):
+        if fs.exists(file_path):
+            if not fs.exists(target_dir):
+                fs.mkdir(target_dir)
+            if not fs.exists(target_path):
                 split_classes.append(t["clean_text"])
-                shutil.copy(file_path, target_path)
+                fs.copy(file_path, target_path)
         else:
             split_misses.append((file_name, url))
     return split_classes, split_misses
