@@ -19,11 +19,16 @@ from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 #read json file containing video url with other details required for preprocessing like start time, end time, etc.
 MSASL_trainData = pd.read_json(r'MSASL_train.json')
+MSASL_valData = pd.read_json(r'MSASL_val.json')
+MSASL_testData = pd.read_json(r'MSASL_test.json')
 MSASL_classes = pd.read_json(r'MSASL_classes.json')
 MSASL_classes.columns = ['class']
-MSASL_trainData['urlVideoStartPoint'] = MSASL_trainData['url'].str.find('=')
+
+MSASL_Data = pd.concat([MSASL_trainData, MSASL_valData, MSASL_testData], ignore_index=True)
+
+MSASL_Data['urlVideoStartPoint'] = MSASL_Data['url'].str.find('=')
 # data["Indexes"]= data["Name"].str.find(sub) 
-MSASL_trainData['VideoName'] = MSASL_trainData['url'].str[32:] #Fixing the substring since the video name always starts from index = 32 (eg: https://www.youtube.com/watch?v=) Testing code: df = MSASL_trainData.loc[MSASL_trainData['url'] == 'https://www.youtube.com/watch?v=Kw6fTVZvJgM']
+MSASL_Data['VideoName'] = MSASL_Data['url'].str[32:] #Fixing the substring since the video name always starts from index = 32 (eg: https://www.youtube.com/watch?v=) Testing code: df = MSASL_trainData.loc[MSASL_trainData['url'] == 'https://www.youtube.com/watch?v=Kw6fTVZvJgM']
 
 def TrimVideoClip(data_dir):
     # data_dir = "/MSData/subset"
@@ -33,7 +38,7 @@ def TrimVideoClip(data_dir):
 
     for file_name in files:
         fileName = (file_name[:-4])
-        VideoNameDF = MSASL_trainData.loc[MSASL_trainData['VideoName'] == fileName] #Filter for the file name in the df
+        VideoNameDF = MSASL_Data.loc[MSASL_Data['VideoName'] == fileName] #Filter for the file name in the df
         if VideoNameDF.empty:
             continue
         start_time = VideoNameDF['start_time'].min() # read the corresponding start and end time for the vide from the df; min(), max() are just a proxy; we expect start and end time to be same for a given video name in case multiple enteries are present for the video
@@ -55,7 +60,7 @@ def sort_files(data_dir):
     home_directory = os.getcwd() + data_dir
     files = [f for f in listdir(home_directory) if isfile(join(home_directory, f))]
 
-    df = MSASL_trainData[['clean_text','VideoName']]
+    df = MSASL_Data[['clean_text','VideoName']]
 
     name_dict = df.groupby(['clean_text'])['VideoName'].apply(list).to_dict()
 
@@ -133,7 +138,7 @@ def split_test_train(main_dir,data_folder_path):
             os.rmdir(file_direc)
             print("Done Splitting Dataset")
 
-def convert_to_frames(Inputdata_path,word_count,input_type,num_frames):
+def convert_to_frames(Inputdata_path,word_count,input_type):
     """
     Takes Raw training Input dataset and converts them from video to frames 
     """
@@ -144,10 +149,11 @@ def convert_to_frames(Inputdata_path,word_count,input_type,num_frames):
     image_data = os.path.join(os.getcwd(), "MSData/image_data_" + input_type)
     if (not exists(image_data)):
         os.makedirs(image_data)
-
+        
+    frame_count = 0
     Inputdata_path = os.path.join(os.getcwd(), Inputdata_path, input_type)
     os.chdir(Inputdata_path)
-    # print("Inputdata_path: ",Inputdata_path)
+   # print("Inputdata_path: ",Inputdata_path)
     
     # Get all files with raw data for words, only keep how many you want
     gesture_list = os.listdir(os.getcwd())
@@ -165,36 +171,34 @@ def convert_to_frames(Inputdata_path,word_count,input_type,num_frames):
         #print("frames", frames)
         
         videos = mylistdir(os.getcwd())
-        videos_dir = os.getcwd()
         videos = [video for video in videos if(os.path.isfile(os.getcwd() + '/' +  video))]
 
         for video in videos:
             video_name = video[:-4] #removing .mp4 from the video name
-            # print("video_name: ", video_name)
-            os.chdir(videos_dir)
+            #print("video_name: ", video_name)
             vidcap = cv2.VideoCapture(video)
-            total_frames = vidcap.get(cv2.CAP_PROP_FRAME_COUNT)
-            frames_step = total_frames / num_frames
+            success,image = vidcap.read()
+            frame_count = 0
             os.chdir(frames)
-            for i in range(num_frames):
-                vidcap.set(1, floor(i * frames_step))
-                success,image = vidcap.read() 
-                print('read a new frame: ', success) 
-                # image = cv2.cvtcolor(image,cv2.color_bgr2gray) # to convert image to grayscale
-                cv2.imwrite("%s_frame%d.jpg" % (video_name, i), image) # save frame as jpeg file
+            while success:
+              # image = cv2.cvtcolor(image,cv2.color_bgr2gray) # to convert image to grayscale
+              cv2.imwrite("%s_frame%d.jpg" % (video_name,frame_count), image)     # save frame as jpeg file      
+              success,image = vidcap.read()
+              print('read a new frame: ', success)
+              frame_count += 1
     
 if __name__ == '__main__':
     
     data_dir = "/MSData/subset"
     sort_dir = data_dir + "/TrimmedVideos"
 
-    # TrimVideoClip(data_dir)
+    TrimVideoClip(data_dir)
     
     # sort_files(sort_dir)
 
     # split_dir = "/MSData/"
     # data_folder_path = "subset/TrimmedVideos/"
     # split_test_train(split_dir, data_folder_path)
-    #convert_to_frames("MSData/",10,"train")
-    convert_to_frames("MSData/",10,"test",80)
+    # convert_to_frames("MSData/",10,"train")
+    # convert_to_frames("MSData/",10,"test")
     # def convert_to_frames(dataset,word_count,input_type,output_pickle_name)
