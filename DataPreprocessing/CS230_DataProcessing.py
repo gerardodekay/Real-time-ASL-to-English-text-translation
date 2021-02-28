@@ -26,9 +26,11 @@ MSASL_classes.columns = ['class']
 
 MSASL_Data = pd.concat([MSASL_trainData, MSASL_valData, MSASL_testData], ignore_index=True)
 
-MSASL_Data['urlVideoStartPoint'] = MSASL_Data['url'].str.find('=')
-# data["Indexes"]= data["Name"].str.find(sub) 
-MSASL_Data['VideoName'] = MSASL_Data['url'].str[32:] #Fixing the substring since the video name always starts from index = 32 (eg: https://www.youtube.com/watch?v=) Testing code: df = MSASL_trainData.loc[MSASL_trainData['url'] == 'https://www.youtube.com/watch?v=Kw6fTVZvJgM']
+# new data frame with url splitted to get the video name
+split_df = MSASL_Data["url"].str.split("=", n = 1, expand = True) 
+  
+# making separate last name column from new data frame 
+MSASL_Data["VideoName"]= split_df[1]
 
 def TrimVideoClip(data_dir):
     # data_dir = "/MSData/subset"
