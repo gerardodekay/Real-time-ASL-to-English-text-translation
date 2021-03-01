@@ -303,7 +303,7 @@ def TopLayer(input_shape, classes, dropout_prob):
     return final_model
 
 
-def add_top_layer(base_model: Model, classes: int, dropout_prob: bool):
+def add_top_layer(base_model: Model, classes: int, dropout_prob: float):
     top_layer = TopLayer(base_model.output_shape[1:], classes, dropout_prob)
     x = base_model.output
     predictions = top_layer(x)
