@@ -1,6 +1,6 @@
 import sys 
 
-import cv2
+# import cv2
 import os
 import pickle
 from os.path import join, exists
@@ -18,10 +18,10 @@ from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
 
 #read json file containing video url with other details required for preprocessing like start time, end time, etc.
-MSASL_trainData = pd.read_json(r'MSASL_train.json')
-MSASL_valData = pd.read_json(r'MSASL_val.json')
-MSASL_testData = pd.read_json(r'MSASL_test.json')
-MSASL_classes = pd.read_json(r'MSASL_classes.json')
+MSASL_trainData = pd.read_json('data/MSASL_train.json')
+MSASL_valData = pd.read_json('data/MSASL_val.json')
+MSASL_testData = pd.read_json('data/MSASL_test.json')
+MSASL_classes = pd.read_json('data/MSASL_classes.json')
 MSASL_classes.columns = ['class']
 
 MSASL_Data = pd.concat([MSASL_trainData, MSASL_valData, MSASL_testData], ignore_index=True)
@@ -29,11 +29,10 @@ MSASL_Data = pd.concat([MSASL_trainData, MSASL_valData, MSASL_testData], ignore_
 # new data frame with url splitted to get the video name
 split_df = MSASL_Data["url"].str.split("=", n = 1, expand = True) 
   
-# making separate last name column from new data frame 
+# making separate Video name column from new data frame 
 MSASL_Data["VideoName"]= split_df[1]
 
 def TrimVideoClip(data_dir):
-    # data_dir = "/MSData/subset"
     video_dir = os.getcwd() + data_dir + "/"
     home_directory = os.getcwd() + data_dir
     files = [f for f in listdir(home_directory) if isfile(join(home_directory, f))]
@@ -43,10 +42,9 @@ def TrimVideoClip(data_dir):
         VideoNameDF = MSASL_Data.loc[MSASL_Data['VideoName'] == fileName] #Filter for the file name in the df
         if VideoNameDF.empty:
             continue
-        start_time = VideoNameDF['start_time'].min() # read the corresponding start and end time for the vide from the df; min(), max() are just a proxy; we expect start and end time to be same for a given video name in case multiple enteries are present for the video
+        start_time = VideoNameDF['start_time'].min() # read the corresponding start and end time for the video from the df; min(), max() are just a proxy; we expect start and end time to be same for a given video name in case multiple enteries are present for the video
         end_time = VideoNameDF['end_time'].max()
         print(fileName,start_time, end_time)
-        print(end_time)
         videoInput_path = video_dir + file_name
         TrimmedVideo_TargetPath = video_dir + "/TrimmedVideos/"
         
@@ -55,90 +53,50 @@ def TrimVideoClip(data_dir):
         
         ffmpeg_extract_subclip(videoInput_path, start_time, end_time, targetname=TrimmedVideo_TargetPath+file_name)
 
+def copy_split(split_json, split_name="train"):
+    split_classes = []
+    split_misses = []
+    if not os.path.exists(VIDEOS_PATH + "/" + split_name):
+        os.mkdir(VIDEOS_PATH + "/" + split_name)
+    for t in split_json:
+        url = t["url"]
+        file_name = url[url.index("v=")+2:len(url)] + ".mp4"
+        file_path = VIDEOS_PATH + "/videos/" + file_name
+        target_dir = VIDEOS_PATH + "/" + split_name + "/" + t["clean_text"]
+        target_path = target_dir + "/" + file_name
+        if os.path.exists(file_path):
+            if not os.path.exists(target_dir):
+                os.mkdir(target_dir)
+            if not os.path.exists(target_path):
+                split_classes.append(t["clean_text"])
+                shutil.copy(file_path, target_path)
+        else:
+            split_misses.append((file_name, url))
+    return split_classes, split_misses
 
-def sort_files(data_dir):
 
-    data_dir = "/MSData/subset/TrimmedVideos"
-    home_directory = os.getcwd() + data_dir
-    files = [f for f in listdir(home_directory) if isfile(join(home_directory, f))]
+def split_data():
+    train_f = JSON_PATH + "/MSASL_train.json"
+    classes_f = JSON_PATH + "/MSASL_classes.json"
+    test_f = JSON_PATH + "/MSASL_test.json"
+    val_f = JSON_PATH + "/MSASL_val.json"
 
-    df = MSASL_Data[['clean_text','VideoName']]
+    with open(train_f) as f:
+        train_json = json.load(f)
+    with open(classes_f) as f:
+        classes_json = json.load(f)
+    with open(test_f) as f:
+        test_json = json.load(f)
+    with open(val_f) as f:
+        val_json = json.load(f)
 
-    name_dict = df.groupby(['clean_text'])['VideoName'].apply(list).to_dict()
+    train_classes, train_misses = copy_split(train_json, "train")
+    val_classes, val_misses = copy_split(val_json, "val")
+    test_classes, test_misses = copy_split(test_json, "test")
 
-    for className, Videos in name_dict.items():
-        for videoName in Videos:
-            output_names = [f for f in files if (f[:-4] == videoName)]
-            for file_name in output_names: 
-                if not os.path.exists(home_directory + "/" +  className):
-                    os.mkdir(home_directory + "/" + className)
-                current_directory = home_directory + "/" + file_name
-                print(current_directory)
-                new_directory = home_directory + "/" +  className + "/" + file_name
-                print('new_directory',new_directory)
-                if os.path.exists(current_directory):
-                    shutil.move(current_directory, new_directory)
-                    print(className, " Moved!")
+    print("test")
 
-def mylistdir(directory):
-    """A specialized version of os.listdir() that ignores files that
-    start with a leading period."""
-    filelist = os.listdir(directory)
-    return [x for x in filelist
-            if not (x.startswith('.'))]
 
-def split_test_train(main_dir,data_folder_path):
-    """
-    Moves raw video data into training (70%) and testing (30%) sets 
-    """
-    main_dir = os.getcwd() + main_dir
-    data_dir = main_dir + data_folder_path
-
-    all_files = mylistdir(os.path.abspath(data_dir))
-    for file_name in all_files:
-        # Get a list of the files
-        file_direc = os.path.abspath(data_dir + file_name)
-        if(os.path.isdir(file_direc)):
-            data_files = list(filter(lambda file: file.endswith('mp4'), mylistdir(file_direc)))
-
-            # Randomize the files
-            shuffle(data_files)
-
-            #Split files into training and testing sets
-            split = 0.7
-            split_index = floor(len(data_files) * split)
-            training = data_files[:split_index]
-            testing = data_files[split_index:]
-
-            train_dir = main_dir + "train/"
-            test_dir = main_dir + "test/"
-
-            if(not os.path.exists(train_dir)):
-                os.makedirs(train_dir)
-
-            if(not os.path.exists(test_dir)):
-                os.makedirs(test_dir)
-	    
-            for file in training:
-                from_dir = data_dir + file_name + "/" + file
-                to_dir =  train_dir + file_name 
-                if(not os.path.exists(to_dir)):
-                    os.makedirs(to_dir)
-
-                to_dir += "/" + file
-                shutil.move(from_dir, to_dir)
-
-            for file in testing:
-                from_dir = data_dir + file_name + "/" + file
-                to_dir =  test_dir + file_name 
-                if(not os.path.exists(to_dir)):
-                    os.makedirs(to_dir)
-
-                to_dir += "/" + file
-                shutil.move(from_dir, to_dir)
-
-            os.rmdir(file_direc)
-            print("Done Splitting Dataset")
 
 def convert_to_frames(Inputdata_path,word_count,input_type):
     """
@@ -190,17 +148,13 @@ def convert_to_frames(Inputdata_path,word_count,input_type):
               frame_count += 1
     
 if __name__ == '__main__':
-    
-    data_dir = "/MSData/subset"
-    sort_dir = data_dir + "/TrimmedVideos"
 
-    TrimVideoClip(data_dir)
-    
-    # sort_files(sort_dir)
+    JSON_PATH = '/home/ubuntu/data'
+    VIDEOS_PATH = '/data/videos'
+    TrimmedVideos_PATH = '/home/ubuntu/data/videos/TrimmedVideos'
 
-    # split_dir = "/MSData/"
-    # data_folder_path = "subset/TrimmedVideos/"
-    # split_test_train(split_dir, data_folder_path)
+    TrimVideoClip(VIDEOS_PATH)
+    # split_data(TrimmedVideos_PATH,JSON_PATH)
+
     # convert_to_frames("MSData/",10,"train")
     # convert_to_frames("MSData/",10,"test")
-    # def convert_to_frames(dataset,word_count,input_type,output_pickle_name)

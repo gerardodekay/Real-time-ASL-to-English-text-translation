@@ -310,9 +310,10 @@ def add_top_layer(base_model: Model, classes: int, dropout_prob: float):
     new_model = Model(inputs=base_model.input, outputs=predictions, name="i3d_with_top")
     return new_model
 
-
-def layers_freeze(model):
-    print("Freeze all %d layers in Model %s" % (len(model.layers), model.name))
-    for layer in model.layers:
+def layers_freeze(model, leave_last=50):
+    print("Freezing %d layers of %d in Model %s" % (len(model.layers)-leave_last, len(model.layers), model.name))
+    for layer in model.layers[:-leave_last]:
         layer.trainable = False
+    for layer in model.layers[-leave_last:]:
+        layer.trainable = True
     return model
